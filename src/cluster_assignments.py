@@ -78,13 +78,54 @@ class ClusterAssignmentsState(object):
         
     def gibs_sampler(self, n_iter):
         while n_iter > 0:
-            print n_iter
+            print "Gibbs Sampler iter %d" % n_iter
             n_iter -= 1
             self.sample_z()
             self.sample_pi()
             self.sample_theta()
         
         print "F1: %f" % eval_metrics.f_measure(self.true_labels, self.z)
+        
+    '''
+    Colapsed Gibs sampling related code
+    '''
+    def p_xi_score(self, data_id, cluster_id):
+        posterior_var_k = 1.0 / (self.cluster_counts[cluster_id] / self.cluster_var + 1.0 / self.var_prior)
+        posterior_theta_k = posterior_var_k * (self.theta_prior / self.var_prior + \
+                             self.cluster_counts[cluster_id] * (self.data_sum[cluster_id] / self.cluster_counts[cluster_id]) / self.cluster_var)
+        predictive_var = np.sqrt(posterior_var_k + self.cluster_var)
+        return stats.norm(posterior_theta_k, predictive_var).logpdf(self.data[data_id])
+    
+    def log_cluster_assign_score(self, cluster_id):
+        return np.log(self.cluster_counts[cluster_id] + self.alpha_prior[cluster_id] / self.n_clusters)
+    
+    def cluster_assignment_distribution(self, data_id):
+        scores = np.zeros(self.n_clusters)
+        for cid in self.cluster_ids:
+            cid_score = self.p_xi_score(data_id, cid)
+            cid_score += self.log_cluster_assign_score(cid)
+            scores[cid] = np.exp(cid_score)
+        normalization = 1.0 / np.sum(scores)
+        scores = scores * normalization
+        return scores
+    
+    def collapsed_gibs_sampler(self, n_iter):
+        while n_iter > 0:
+            print "Collapsed Gibbs Sampler iter %d" % n_iter
+            n_iter -= 1
+            for data_i in range(self.data_size):
+                y_val = self.data[data_i]
+                current_z = self.z[data_i]
+                self.data_sum[current_z] -= y_val
+                self.cluster_counts[current_z] -= 1.0
+                
+                scores = self.cluster_assignment_distribution(data_i)
+                new_z = np.random.choice(self.cluster_ids, p=scores)
+                
+                self.z[data_i] = new_z
+                self.data_sum[new_z] += y_val
+                self.cluster_counts[new_z] += 1.0
+        print "F1: %f" % eval_metrics.f_measure(self.true_labels, self.z)             
         
 def plot_clusters(cluster_assigment):
     gby = pd.DataFrame({
@@ -100,5 +141,5 @@ def plot_clusters(cluster_assigment):
             
 
 ca = ClusterAssignmentsState("../clusters.csv", "../clusters_labels.csv", 3, 0.01, [10, 10, 10], 0.0, 1.0)
-ca.gibs_sampler(10)
+ca.collapsed_gibs_sampler(10)
 plot_clusters(ca)
