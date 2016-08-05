@@ -4,10 +4,13 @@ Created on 03/08/2016
 @author: Mota
 '''
 from scipy import stats
-import numpy as np
-import pandas as pd
+
+from data_generator import run_data_gen
 import eval_metrics
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
 
 class ClusterAssignmentsState(object):
 
@@ -229,19 +232,32 @@ def plot_clusters(cluster_assigment):
              histtype='stepfilled', alpha=.5 )
     plt.show()
             
-data_path = "../clusters.csv"
-labels_path = "../clusters_labels.csv"
+data_path = "../data.csv"
+labels_path = "../labels.csv"
 n_clusters = 3
 cluster_var = 0.01
-alpha_prior = [10, 10, 10]
+alpha_prior = [10] * n_clusters
 theta_prior = 0.0
 var_prior = 1.0
+
+data_gen_var = 0.2
+params = [[0, data_gen_var], [1, data_gen_var], [2, data_gen_var], [3, data_gen_var], [4, data_gen_var]]
+n_clusters = len(params)
+alpha_prior = [10] * n_clusters
+n_samples = 500
+run_data_gen(data_path, labels_path, params, n_samples)
+
+ca = ClusterAssignmentsState(data_path, labels_path, n_clusters, cluster_var, alpha_prior, theta_prior, var_prior)
+ca.gibs_sampler(10)
+
 #ca = ClusterAssignmentsState(data_path, labels_path, n_clusters, cluster_var, alpha_prior, theta_prior, var_prior)
 #ca.collapsed_gibs_sampler(10)
 
+'''
 n_clusters = 1
 dp_alpha = 0.5
 ca = ClusterAssignmentsState(data_path, labels_path, n_clusters, cluster_var, alpha_prior, theta_prior, var_prior, dp_alpha)
 ca.collapsed_gibs_sampler_dp(20)
+'''
 
 plot_clusters(ca)
